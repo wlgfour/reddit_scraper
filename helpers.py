@@ -4,6 +4,7 @@ import os
 import random
 import time
 import re
+import nltk
 
 import numpy as np
 import pandas as pd
@@ -96,7 +97,7 @@ class DumbQueue:
         self.data = []
 
     def put(self, obj):
-        self.data.append(data)
+        self.data.append(obj)
 
     def get(self):
         return self.data.pop(0)
@@ -109,17 +110,25 @@ class DumbQueue:
 
 class VaderSentiment:
     """ Predict fine-grained sentiment classes using Vader.
+        https://github.com/cjhutto/vaderSentiment
         https://towardsdatascience.com/fine-grained-sentiment-analysis-in-python-part-1-2697bb111ed4
     """
 
-    def __init__(self, model_file: str = None) -> None:
+    def __init__(self):
         super().__init__()
         from nltk.sentiment.vader import SentimentIntensityAnalyzer
+        nltk.download('vader_lexicon', quiet=True)
         self.vader = SentimentIntensityAnalyzer()
 
-    def score(self, text: str) -> float:
+    def score(self, text):
         return self.vader.polarity_scores(text)['compound']
 
+def apply_vader(q, df, lower=False):
+    vader = VaderSentiment()
+    if lower:
+        df = df.str.lower()
+    df = df.apply(vader.score).astype(np.float16)
+    q.put(df)
 
 def clean_data(df, col='body', rcol='body_', lower=False):
     pass
