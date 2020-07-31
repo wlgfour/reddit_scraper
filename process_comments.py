@@ -51,7 +51,7 @@ while len(done) < len(procs):
             df = q.get()
             if df is not None:
                 Df = data[sub]
-                Df['score'] = df
+                Df['sentiment'] = df
                 dfs[sub] = Df
             q.close()
             p.join()
