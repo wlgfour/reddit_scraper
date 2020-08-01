@@ -43,7 +43,7 @@ class Config:
         if name != 'atts' and name in self.atts:
             return self.atts[name]
 
-def read_data(exclude_subs=None, exclude_types=None, include_subs=None, include_types=None):
+def read_data(submission_cols=lambda c: True, comment_cols=lambda c: True, exclude_subs=None, exclude_types=None, include_subs=None, include_types=None):
     p = re.compile(r'^([a-zA-Z0-9_]+)_(submission|comment)\.(csv|pkl)$')
     data = {}
     for file in os.listdir('data'):
@@ -68,7 +68,11 @@ def read_data(exclude_subs=None, exclude_types=None, include_subs=None, include_
         else:
             dir = 'processed'
         if extension == 'csv':
-            df = pd.read_csv(os.path.join(dir, file))
+            if group == 'submission':
+                usecols = submission_cols
+            else:
+                usecols = comment_cols
+            df = pd.read_csv(os.path.join(dir, file), usecols=usecols)
         elif extension == 'pkl':
             df = pd.read_pickle(os.path.join(dir, file))
         else:

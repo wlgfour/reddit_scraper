@@ -16,6 +16,8 @@ colors = [None, '#69B859', '#E76A47']  # [Irrelevant, +1, -1]
 days = ['Mon', 'Tues', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 delta = datetime.timedelta(days=1)
 def get_colors(Y):
+    if Y.shape[0] == 0:
+        return np.zeros_like(Y)
     red = np.array(mpl.colors.to_rgba(colors[-1]))
     gre = np.array(mpl.colors.to_rgba(colors[1]))
     cols = np.zeros([Y.shape[0], 4])
@@ -44,7 +46,11 @@ if __name__ == '__main__':
                         help='The names of the subreddits to plot.')
     args = parser.parse_args()
 
-    data = read_data(include_subs=args.subs)
+    if len(args.subs) == 0:
+        print('Please provide an argument to --subs.')
+        exit(1)
+    usecols = ['created_utc', 'score']
+    data = read_data(include_subs=args.subs, submission_cols=usecols, comment_cols=usecols)
     calendardir = os.path.join('plots', 'calendar')
     if not os.path.isdir('plots'):
         os.mkdir('plots')
@@ -127,6 +133,7 @@ if __name__ == '__main__':
                     Y = np.array(mdf['score'].to_list())[:, np.newaxis]
                     P0 = np.concatenate([X, np.zeros([Y.shape[0], 1])], axis=1)[:, np.newaxis]
                     P1 = np.concatenate([X, np.log1p(np.abs(Y))], axis=1)[:, np.newaxis]
+                    P1_ = np.concatenate([X, np.sign(Y) * np.log1p(np.abs(Y))], axis=1)[:, np.newaxis]
                     lines = np.concatenate([P0, P1], axis=1)
                     cols = get_colors(Y)
 
@@ -140,13 +147,12 @@ if __name__ == '__main__':
                     nlc = mpl.collections.LineCollection(neglines, colors=negcols, alpha=0.75, linewidth=3, zorder=1, capstyle='round')
                     ax.add_artist(nlc)
 
-                    cut = min(1, len(P1))
-                    if cut == 0:  # top N scatter below ONLY ============================================
+                    cut = min(1, len(P1_))
+                    if cut == 0:  # top N scatter below ONLY =====================================
                         continue
-                    top = np.array(sorted(P1, key=lambda k: k[0][1], reverse=True))[:cut]
-                    ax.scatter(top[:, :, 0], top[:, :, 1], c='#90be6d', zorder=11, s=50)
-                    bottom = np.array(sorted(P1, key=lambda k: k[0][1]))[:cut]
-                    ax.scatter(bottom[:, :, 0], bottom[:, :, 1], c='#f94144', zorder=10, s=50)
+                    htol = np.array(sorted(P1_, key=lambda k: k[0][1], reverse=True))
+                    ax.scatter(htol[:cut, :, 0], np.abs(htol[:cut, :, 1]), c='#90be6d', zorder=11, s=50)
+                    ax.scatter(htol[-cut:, :, 0], np.abs(htol[-cut:, :, 1]), c='#f94144', zorder=10, s=50)
 
             # Draw legend
             lax.set_axis_off()
@@ -154,9 +160,11 @@ if __name__ == '__main__':
             Y = np.concatenate([10**Y, -1*10**Y[::-1]])
             X = np.linspace(0.25*np.pi, 0.75*np.pi, Y.shape[0])[:, np.newaxis]
             P0 = np.concatenate([X, np.zeros([Y.shape[0], 1])], axis=1)[:, np.newaxis]
-            P1 = np.concatenate([X, np.log1p(np.abs(Y))], axis=1)[:, np.newaxis]
-            lines = np.concatenate([P0, P1], axis=1)
+            P1 = np.concatenate([X, Y], axis=1)[:, np.newaxis]
+            P1_ = np.concatenate([X, np.log1p(np.abs(Y))], axis=1)[:, np.newaxis]
+            lines = np.concatenate([P0, P1_], axis=1)
             cols = get_colors(Y)
+
 
             poslines = lines[Y[:, 0] > 0]
             poscols = cols[Y[:, 0] > 0]
@@ -168,9 +176,10 @@ if __name__ == '__main__':
             nlc = mpl.collections.LineCollection(neglines, colors=negcols, alpha=0.75, linewidth=3, zorder=1, capstyle='round')
             lax.add_artist(nlc)
             for x, y in P1[:, 0, :]:
-                e = int(np.math.log(np.e**y, 10))
+                e = int(np.math.log(np.abs(y+1), 10))
                 s = int(np.sign(y))
-                lax.text(x, y,
+                plot_y = np.log1p(np.abs(y))
+                lax.text(x, plot_y,
                     f'${int(s*10)}^{e}$',
                     fontsize=16, fontweight='semibold', ha='center', va='center'
                     )
