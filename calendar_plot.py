@@ -19,10 +19,9 @@ def get_colors(Y):
     red = np.array(mpl.colors.to_rgba(colors[-1]))
     gre = np.array(mpl.colors.to_rgba(colors[1]))
     cols = np.zeros([Y.shape[0], 4])
-    mask = np.tile((Y > 0)[:, np.newaxis], [1, 4])
-    cols[mask] = gre
-    cols[Y < 0] = red
-    cols[:, -1] = 1 - 66/np.max(np.sqrt(Y), np.ones_like(Y)*75)
+    cols[(Y > 0)[:, 0]] = gre
+    cols[(Y < 0)[:, 0]] = red
+    cols[:, -1] = 1 - 66/np.max([np.sqrt(np.abs(Y[:, 0])), np.ones_like(Y[:, 0])*75])
     return cols
 
 def time_to_angle(time):
@@ -99,24 +98,30 @@ if __name__ == '__main__':
             xoffset = (1/width - 1/(width+2)) / 2
             yoffset = (1/height - 1/(height+2)) / 2
 
+            lax = None
             for i, y in enumerate(y_values[1:]):
                 for j, x in enumerate(x_values[:-1]):
                     ax = fig.add_axes([x+xoffset, y+yoffset, 1/(width+2), 1/(height+3)], projection='polar')
-                    if i == 0:
-                        ax.set_title(days[j], fontsize=26, pad=26, fontweight='heavy')
-                    if month[i][j] is None:
-                        ax.set_axis_off()
-                        continue
-                    dnum, mdf = month[i][j]
-                    mdf = mdf[mdf['score'].astype(int).abs() > 10]
-                    fig.text(x+xoffset, y + 0.9/(height+2) + yoffset, f'{dnum}', fontsize=24, fontweight='heavy')
-                    ax.spines['polar'].set_visible(False)
                     ax.set_theta_offset(np.pi / 2)
                     ax.set_theta_direction(-1)
                     ax.set_xticks(hours)
                     ax.set_xticklabels([f'{i}' for i in range(0, 24, 3)])
                     ax.set_yticks([])
-                    ax.set_ylim(0, np.log1p(maxY) * 1.1)
+                    ax.set_ylim(0, np.log1p(maxY) * 1.2)
+                    if i == 0:
+                        ax.set_title(days[j], fontsize=26, pad=26, fontweight='heavy')
+                    if month[i][j] is None:
+                        if lax is None:
+                            lax = ax
+                        else:
+                            ax.set_axis_off()
+                        continue
+                    dnum, mdf = month[i][j]
+                    mdf = mdf[mdf['score'].astype(int).abs() > 10]
+                    fig.text(x+xoffset, y + 0.9/(height+2) + yoffset, f'{dnum}', fontsize=24, fontweight='heavy')
+                    ax.spines['polar'].set_visible(False)
+                    if len(mdf) == 0:
+                        continue
 
                     X = np.array(mdf['datetime'].apply(time_to_angle).to_list())[:, np.newaxis]
                     Y = np.array(mdf['score'].to_list())[:, np.newaxis]
@@ -135,12 +140,43 @@ if __name__ == '__main__':
                     nlc = mpl.collections.LineCollection(neglines, colors=negcols, alpha=0.75, linewidth=3, zorder=1, capstyle='round')
                     ax.add_artist(nlc)
 
-                    cut = min(3, len(P1))
+                    cut = min(1, len(P1))
                     if cut == 0:  # top N scatter below ONLY ============================================
                         continue
                     top = np.array(sorted(P1, key=lambda k: k[0][1], reverse=True))[:cut]
                     ax.scatter(top[:, :, 0], top[:, :, 1], c='#90be6d', zorder=11, s=50)
                     bottom = np.array(sorted(P1, key=lambda k: k[0][1]))[:cut]
                     ax.scatter(bottom[:, :, 0], bottom[:, :, 1], c='#f94144', zorder=10, s=50)
-            fig.tight_layout(pad=1.15)
+
+            # Draw legend
+            lax.set_axis_off()
+            Y = np.arange(1, np.math.log(maxY, 10)+1, 1)[:, np.newaxis]
+            Y = np.concatenate([10**Y, -1*10**Y[::-1]])
+            X = np.linspace(0.25*np.pi, 0.75*np.pi, Y.shape[0])[:, np.newaxis]
+            P0 = np.concatenate([X, np.zeros([Y.shape[0], 1])], axis=1)[:, np.newaxis]
+            P1 = np.concatenate([X, np.log1p(np.abs(Y))], axis=1)[:, np.newaxis]
+            lines = np.concatenate([P0, P1], axis=1)
+            cols = get_colors(Y)
+
+            poslines = lines[Y[:, 0] > 0]
+            poscols = cols[Y[:, 0] > 0]
+            neglines = lines[Y[:, 0] < 0]
+            negcols = cols[Y[:, 0] < 0]
+
+            plc = mpl.collections.LineCollection(poslines, colors=poscols, alpha=0.33, linewidth=3, zorder=0, capstyle='round')
+            lax.add_artist(plc)
+            nlc = mpl.collections.LineCollection(neglines, colors=negcols, alpha=0.75, linewidth=3, zorder=1, capstyle='round')
+            lax.add_artist(nlc)
+            for x, y in P1[:, 0, :]:
+                e = int(np.math.log(np.e**y, 10))
+                s = int(np.sign(y))
+                lax.text(x, y,
+                    f'${int(s*10)}^{e}$',
+                    fontsize=16, fontweight='semibold', ha='center', va='center'
+                    )
+            lax.scatter([np.pi * 3/2, np.pi * 3/2], [3, 4], c=colors[:0:-1])
+
+            # Save figure
+            print('\tSaving')
+            # fig.tight_layout(pad=1.15)
             fig.savefig(os.path.join(calendardir, f'calendar_{sub}_{type}.png'), bbok_inches='tight', dpi=128)
