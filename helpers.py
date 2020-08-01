@@ -43,6 +43,40 @@ class Config:
         if name != 'atts' and name in self.atts:
             return self.atts[name]
 
+def read_data(exclude_subs=None, exclude_types=None, include_subs=None, include_types=None):
+    p = re.compile(r'^([a-zA-Z0-9_]+)_(submission|comment)\.(csv|pkl)$')
+    data = {}
+    for file in os.listdir('data'):
+        m = p.match(file)
+        if m is None:
+            print(f'! couldn\'t parse {file}')
+            continue
+        sub, group, extension = [m.group(i) for i in [1, 2, 3]]
+        
+        if exclude_subs is not None and sub in exclude_subs:
+            continue
+        if exclude_types is not None and group in exclude_types:
+            continue
+        if include_subs is not None and sub not in include_subs:
+            continue
+        if include_types is not None and group not in include_types:
+            continue
+
+        print(f'{sub}:{group}')
+        if group == 'submission':
+            dir = 'data'
+        else:
+            dir = 'processed'
+        if extension == 'csv':
+            df = pd.read_csv(os.path.join(dir, file))
+        elif extension == 'pkl':
+            df = pd.read_pickle(os.path.join(dir, file))
+        else:
+            continue
+        if sub not in data:
+            data[sub] = {}
+        data[sub][group] = df
+    return data
 
 def get_data(sub, after, before, mode, use_proxy=True):
     """
